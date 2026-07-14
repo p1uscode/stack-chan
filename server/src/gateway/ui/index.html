@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Character Hub</title>
+    <style>
+      :root {
+        --bg: #0f1216;
+        --panel: #171b21;
+        --panel2: #1e242c;
+        --line: #2a323c;
+        --fg: #e6e9ee;
+        --muted: #8b97a6;
+        --accent: #4aa3ff;
+        --user: #ffcf6b;
+        --asst: #7fd1a0;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 14px/1.5 -apple-system, "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 18px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      header h1 { font-size: 16px; margin: 0; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: #d64; }
+      .dot.on { background: #5c6; }
+      .muted { color: var(--muted); }
+      nav { display: flex; gap: 4px; padding: 10px 18px 0; background: var(--panel); }
+      nav button {
+        background: none; border: none; color: var(--muted); padding: 8px 14px;
+        border-radius: 8px 8px 0 0; cursor: pointer; font-size: 14px;
+      }
+      nav button.active { color: var(--fg); background: var(--bg); }
+      main { padding: 18px; max-width: 1600px; margin: 0 auto; }
+      .tab { display: none; }
+      .tab.active { display: block; }
+      .subnav { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+      .subnav button { background: none; border: none; color: var(--muted); padding: 6px 12px; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+      .subnav button.active { color: var(--fg); border-bottom-color: var(--accent); }
+      .subtab { display: none; }
+      .subtab.active { display: block; }
+      /* overflow-x:auto → wide tables (timeline / channels) scroll inside the card
+         on narrow screens instead of breaking the page layout. */
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; overflow-x: auto; }
+      .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+      table { width: 100%; border-collapse: collapse; }
+      td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { color: var(--muted); font-weight: 600; font-size: 12px; }
+      .role-user { color: var(--user); }
+      .role-assistant { color: var(--asst); }
+      .ts { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 12px; }
+      input, textarea, select, button.act {
+        background: var(--panel2); color: var(--fg); border: 1px solid var(--line);
+        border-radius: 8px; padding: 8px 10px; font: inherit;
+      }
+      textarea { width: 100%; min-height: 340px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+      button.act { cursor: pointer; }
+      button.act:hover { border-color: var(--accent); }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+      .row > input[type="text"] { flex: 1; min-width: 160px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+      .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); }
+      #hclients { display: flex; gap: 6px; flex-wrap: wrap; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); color: var(--fg); }
+      .chip .cdot { width: 7px; height: 7px; border-radius: 50%; background: var(--asst); flex: none; }
+      .chip .cn { color: var(--muted); }
+      .chip.busy { border-color: var(--accent); color: var(--accent); }
+      .chip.busy .cdot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+      @keyframes pulse { 50% { opacity: .35; } }
+      pre.j { margin: 0; font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+      .ok { color: var(--asst); } .err { color: #e77; }
+      small.hint { color: var(--muted); }
+      /* Responsive: tighter padding + wrapping on phones/tablets. */
+      @media (max-width: 700px) {
+        main { padding: 12px; }
+        header { padding: 10px 12px; gap: 10px; }
+        header h1 { font-size: 15px; }
+        nav { padding: 8px 12px 0; flex-wrap: wrap; }
+        nav button { padding: 8px 12px; }
+        .card { padding: 12px; }
+        textarea { min-height: 200px; }
+        .row > input[type="text"] { min-width: 120px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>🤖 Character Hub</h1>
+      <span><span class="dot" id="hdot"></span> <span id="hstat" class="muted">…</span></span>
+      <span class="muted" id="hclients"></span>
+      <span style="margin-left:auto" class="muted" id="hnote"></span>
+    </header>
+    <nav>
+      <button data-tab="timeline" class="active">タイムライン</button>
+      <button data-tab="control">操作</button>
+      <button data-tab="settings">設定</button>
+    </nav>
+    <main>
+      <section class="tab" id="tab-control">
+        <div class="card">
+          <div class="row">
+            <span class="muted" style="width:44px">送信先</span>
+            <select id="target" style="max-width:260px"><option value="">接続中の全チャンネル</option></select>
+          </div>
+          <div class="row">
+            <input type="text" id="msgText" placeholder="テキスト…" />
+            <button class="act" onclick="send({say: val('msgText')})">送信</button>
+            <button class="act" onclick="send({prompt: val('msgText')})">プロンプト経由</button>
+          </div>
+          <div class="row" style="margin-top:4px;border-top:1px solid var(--line);padding-top:12px">
+            <span class="muted" style="font-size:12px">🤖 ロボット操作 — 身体系ツール(表情・首・LED)を持つ物理チャンネルのみ有効。Slack 等では無視されます。</span>
+          </div>
+          <div class="row">
+            <span class="muted" style="width:44px">表情</span>
+            <select id="emo">
+              <option>NEUTRAL</option><option>HAPPY</option><option>ANGRY</option>
+              <option>SAD</option><option>SLEEPY</option><option>DOUBTFUL</option>
+            </select>
+            <button class="act" onclick="send({body:{tool:'set_emotion',args:{emotion:val('emo')}}})">送信</button>
+          </div>
+          <div class="row">
+            <span class="muted" style="width:44px">首</span>
+            <button class="act" onclick="send({body:{tool:'move_head',args:{yaw:35,pitch:0}}})">← 左</button>
+            <button class="act" onclick="send({body:{tool:'move_head',args:{yaw:-35,pitch:0}}})">右 →</button>
+            <button class="act" onclick="send({body:{tool:'move_head',args:{yaw:0,pitch:30}}})">↑ 上</button>
+            <button class="act" onclick="send({body:{tool:'move_head',args:{yaw:0,pitch:-13}}})">↓ 下</button>
+            <button class="act" onclick="send({body:{tool:'move_head',args:{yaw:0,pitch:0}}})">正面</button>
+            <input type="text" id="head" placeholder="yaw,pitch 例: 20,-10" style="width:130px" />
+            <button class="act" onclick="head()">送信</button>
+          </div>
+          <div class="row">
+            <span class="muted" style="width:44px">LED</span>
+            <button class="act" onclick="send({body:{tool:'set_led',args:{r:48,g:0,b:0}}})">赤</button>
+            <button class="act" onclick="send({body:{tool:'set_led',args:{r:0,g:48,b:0}}})">緑</button>
+            <button class="act" onclick="send({body:{tool:'set_led',args:{r:0,g:0,b:48}}})">青</button>
+            <button class="act" onclick="send({body:{tool:'set_led',args:{r:0,g:0,b:0}}})">消灯</button>
+            <input type="text" id="led" placeholder="r,g,b 例: 0,0,64" style="width:130px" />
+            <button class="act" onclick="led()">送信</button>
+          </div>
+          <div class="row">
+            <span class="muted" style="width:44px">動作</span>
+            <button class="act" onclick="send({body:{tool:'action',args:{type:'nod'}}})">頷く</button>
+            <button class="act" onclick="send({body:{tool:'action',args:{type:'shake'}}})">いやいや</button>
+            <button class="act" onclick="send({body:{tool:'action',args:{type:'dance'}}})">踊る</button>
+          </div>
+          <div id="ctlResult" class="muted"></div>
+        </div>
+        <div class="card">
+          <h2>掛け合い(スキット)</h2>
+          <small class="hint">選んだチャンネルのキャラクター同士がお題について対談します。話す内容を先に用意し、確認・手直ししてから再生。時間は目安(約320字/分で換算、生成後に推定を表示)。停止は今のセリフを言い終えたところで効きます。</small>
+          <div class="row" style="margin-top:8px">
+            <span class="muted" style="width:44px">出演</span>
+            <span id="skitCast" class="muted">(接続中のチャンネルなし)</span>
+          </div>
+          <div class="row">
+            <span class="muted" style="width:44px">お題</span>
+            <input type="text" id="skitTopic" placeholder="例: 今日のAIニュース、TypeScriptの型パズル入門" />
+          </div>
+          <div class="row">
+            <span class="muted" style="width:44px">時間</span>
+            <select id="skitMinutes">
+              <option value="0.5">30秒くらい</option>
+              <option value="1" selected>1分くらい</option>
+              <option value="2">2分くらい</option>
+              <option value="3">3分くらい</option>
+              <option value="5">5分くらい</option>
+            </select>
+            <label class="muted" style="white-space:nowrap"><input type="checkbox" id="skitResearch" checked> Webで下調べ(ニュース等)</label>
+            <button class="act" onclick="skitGenerate()">会話を作る</button>
+            <span id="skitGenResult" class="muted"></span>
+          </div>
+          <div id="skitScript" style="margin-top:6px"></div>
+          <div class="row" id="skitPlayRow" style="display:none">
+            <button class="act" onclick="skitAddLine()">＋ セリフ追加</button>
+            <button class="act" onclick="skitPlay()">▶ 再生</button>
+            <button class="act" onclick="skitStop()">■ 停止</button>
+            <span id="skitPlayResult" class="muted"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-settings">
+        <div class="subnav">
+          <button data-subtab="characters" class="active">キャラクター</button>
+          <button data-subtab="channels">チャンネル</button>
+          <button data-subtab="all">全体</button>
+        </div>
+        <div class="subtab active" id="subtab-characters">
+        <div class="card">
+          <h2>キャラクター</h2>
+          <small class="hint">名前・プロンプト・声を持つキャラクター。端末や Slack など「チャンネル」(端末・Slack等)から参照されます。1つのキャラクターを複数のチャンネルに宿らせられます。プロンプト空欄なら profile の中立な共通指示を使い、名前は自動で注入されます。保存で即反映(接続中は次ターンから)。</small>
+          <div id="characterList" style="margin-top:10px"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="act" onclick="addCharacter()">＋ 新規キャラクター</button>
+            <button class="act" onclick="loadCharacters()">再読込</button>
+            <button class="act" onclick="saveCharacters()">保存</button>
+            <span id="characterResult" class="muted"></span>
+          </div>
+        </div>
+        </div>
+        <div class="subtab" id="subtab-channels">
+        <div class="card">
+          <h2>チャンネル</h2>
+          <small class="hint">キャラクターが宿る先。<b>タイプ別</b>に管理します。stack-chan(物理ロボット)は接続で自動追加。今後 slack 等のタイプを増やせます。各チャンネルにキャラクター・声の上書き・ツール・追加プロンプトを設定。保存で即反映(接続中は次ターンから)。</small>
+          <div id="channelSections" style="margin-top:10px"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="act" onclick="loadDevices()">再読込</button>
+            <button class="act" onclick="saveDevices()">保存</button>
+            <span id="devResult" class="muted"></span>
+          </div>
+        </div>
+        </div>
+        <div class="subtab" id="subtab-all">
+          <div class="card">
+            <h2>全体(gateway.config.yaml)</h2>
+            <small class="hint">common / characters / channels を含む<b>全設定</b>のJSON。GUI(キャラクター/チャンネル)で扱えない項目(common の endpoint・履歴パラメータ等)もここで直接編集できます。秘密(CF-Accessトークン)は含まれません。保存で即反映(既存接続は次ターンから)。</small>
+            <textarea id="cfg" spellcheck="false"></textarea>
+            <div class="row" style="margin-top:10px">
+              <button class="act" onclick="loadConfig()">再読込</button>
+              <button class="act" onclick="saveConfig()">保存</button>
+              <span id="cfgResult" class="muted"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab active" id="tab-timeline">
+        <div class="card">
+          <h2>タイムライン(会話 + イベント)</h2>
+          <small class="hint">会話とイベントを時系列で統合。日時・種別・誰・チャンネルで絞り込み。件数が多くてもサーバ側でページングします。</small>
+          <div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">
+            <span class="muted">日時</span>
+            <input type="datetime-local" id="tlFrom" title="この日時以降">
+            <span class="muted">〜</span>
+            <input type="datetime-local" id="tlTo" title="この日時以前">
+            <span class="muted">種別</span>
+            <select id="tlKind">
+              <option value="">すべて</option>
+              <option value="conv">会話</option>
+              <option value="event">イベント全般</option>
+              <option value="connect">接続</option>
+              <option value="disconnect">切断</option>
+              <option value="tool">ツール</option>
+              <option value="webhook">webhook</option>
+              <option value="control">操作</option>
+              <option value="skit">掛け合い</option>
+            </select>
+            <span class="muted">誰</span>
+            <select id="tlWho"><option value="">すべて</option><option value="human">👤 人</option><option value="system">⚙️ system</option></select>
+            <span class="muted">チャンネル</span>
+            <select id="tlDevice"><option value="">すべて</option></select>
+            <button class="act" onclick="applyTimeline()">適用</button>
+            <button class="act" onclick="resetTimeline()">リセット</button>
+          </div>
+          <table style="margin-top:8px"><thead><tr><th>時刻</th><th>種別</th><th>誰</th><th>チャンネル</th><th>内容</th></tr></thead>
+          <tbody id="tlBody"></tbody></table>
+          <div class="row" style="margin-top:8px">
+            <button class="act" id="tlPrev" onclick="pageTimeline(-1)">← 前へ</button>
+            <button class="act" id="tlNext" onclick="pageTimeline(1)">次へ →</button>
+            <span id="tlPageInfo" class="muted"></span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id)
+      const val = (id) => $(id).value.trim()
+      const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+      const hhmm = (ts) => { try { return new Date(ts).toLocaleTimeString('ja-JP') } catch { return ts } }
+      // Remember the active tab + settings sub-tab across reloads (localStorage).
+      // Old saved tabs (characters/channels/all) now live under Settings — map them.
+      const SUBTABS = ['characters', 'channels', 'all']
+      let saved = localStorage.getItem('gwTab') || 'timeline'
+      let subtab = localStorage.getItem('gwSubtab') || 'characters'
+      if (SUBTABS.includes(saved)) { subtab = saved; saved = 'settings' }
+      if (saved === 'devices' || saved === 'config') { subtab = saved === 'config' ? 'all' : 'channels'; saved = 'settings' }
+      let current = document.getElementById('tab-' + saved) ? saved : 'control'
+      if (!SUBTABS.includes(subtab)) subtab = 'characters'
+      function applyTab(name) {
+        if (!document.getElementById('tab-' + name)) name = 'control'
+        current = name
+        localStorage.setItem('gwTab', name)
+        document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('active', x.dataset.tab === name))
+        document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.id === 'tab-' + name))
+      }
+      function applySubtab(name) {
+        if (!document.getElementById('subtab-' + name)) name = 'characters'
+        subtab = name
+        localStorage.setItem('gwSubtab', name)
+        document.querySelectorAll('.subnav button').forEach((x) => x.classList.toggle('active', x.dataset.subtab === name))
+        document.querySelectorAll('.subtab').forEach((t) => t.classList.toggle('active', t.id === 'subtab-' + name))
+      }
+      document.querySelectorAll('.subnav button').forEach((b) =>
+        b.addEventListener('click', () => { applySubtab(b.dataset.subtab); refreshSettings() })
+      )
+      document.querySelectorAll('nav button').forEach((b) =>
+        b.addEventListener('click', () => { applyTab(b.dataset.tab); refresh() })
+      )
+
+      async function api(path, opts) {
+        const r = await fetch(path, opts)
+        return r.json()
+      }
+
+      async function send(action) {
+        // Target = a specific unit (hardware_id) or "" = all connected robots.
+        const target = $('target')?.value
+        if (target) action = { ...action, target }
+        $('ctlResult').textContent = '送信中…'
+        try {
+          const r = await api('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action) })
+          $('ctlResult').innerHTML = r.ok ? `<span class="ok">OK: ${esc(JSON.stringify(r.applied))}</span>` : `<span class="err">${esc(r.error || '失敗')}</span>`
+        } catch (e) { $('ctlResult').innerHTML = `<span class="err">${esc(e.message)}</span>` }
+        if (current === 'timeline') refreshTimeline()
+      }
+      function head() {
+        if (!val('head')) { $('ctlResult').innerHTML = '<span class="err">yaw,pitch を入力(例 20,-10)。プリセットボタンでもOK</span>'; return }
+        // Robust parse: accept full-width comma/space separators and extra spaces.
+        const nums = val('head').replace(/[，、]/g, ',').split(/[,\s]+/).filter((s) => s !== '').map(Number)
+        const [yaw = 0, pitch = 0] = nums
+        if (nums.some((n) => Number.isNaN(n))) { $('ctlResult').innerHTML = '<span class="err">数値で入力(例 20,-10)</span>'; return }
+        send({ body: { tool: 'move_head', args: { yaw, pitch } } })
+      }
+      function led() {
+        if (!val('led')) { $('ctlResult').innerHTML = '<span class="err">r,g,b を入力(例 0,0,64)。プリセットボタンでもOK</span>'; return }
+        const [r, g, b] = val('led').split(',').map((x) => Number(x) || 0)
+        send({ body: { tool: 'set_led', args: { r, g, b } } })
+      }
+
+      async function refreshClients() {
+        const { clients, channelsTotal = 0 } = await api('/api/clients')
+        const active = clients.length
+        $('hdot').classList.toggle('on', active > 0)
+        const busyN = clients.filter((c) => c.busy).length
+        // Header = channel count + active count (registered channels vs connected).
+        $('hstat').innerHTML =
+          `チャンネル <b>${channelsTotal}</b> · アクティブ <b>${active}</b>` + (busyN ? ` <span class="muted">(${busyN}話し中)</span>` : '')
+        $('hclients').innerHTML = ''
+        // Keep the manual-control target dropdown in sync with connected units.
+        const sel = $('target')
+        if (sel) {
+          const keep = sel.value
+          sel.innerHTML = '<option value="">接続中の全チャンネル</option>' +
+            clients.map((c) => `<option value="${esc(c.hardwareId)}">${esc(c.label || c.name || ('#' + c.id))}${c.name ? ' / ' + esc(c.name) : ''}</option>`).join('')
+          if ([...sel.options].some((o) => o.value === keep)) sel.value = keep
+        }
+        skitSyncCast(clients)
+      }
+      // --- 掛け合い(スキット) ---------------------------------------------
+      let skitCast = [] // 接続中チャンネル [{channelKey, name, label}](refreshClientsで追従)
+      let skitLines = null // 生成済みの会話 [{channelKey, name, text}]
+      const skitName = (c) => c.name || c.label || c.channelKey
+      // 出演チェックボックスを接続中チャンネルに追従させる(チェック外しは維持)。
+      function skitSyncCast(clients) {
+        const cast = clients.filter((c) => c.channelKey)
+        if (JSON.stringify(cast.map((c) => c.channelKey)) === JSON.stringify(skitCast.map((c) => c.channelKey))) return
+        const off = new Set([...document.querySelectorAll('input[data-skit-ck]')].filter((i) => !i.checked).map((i) => i.dataset.skitCk))
+        skitCast = cast
+        $('skitCast').innerHTML = skitCast.length
+          ? skitCast.map((c) => `<label style="margin-right:12px;white-space:nowrap"><input type="checkbox" data-skit-ck="${esc(c.channelKey)}"${off.has(c.channelKey) ? '' : ' checked'}> ${esc(skitName(c))}</label>`).join('')
+          : '(接続中のチャンネルなし)'
+      }
+      function skitLineRow(l) {
+        const opts = skitCast.map((c) => `<option value="${esc(c.channelKey)}"${c.channelKey === l.channelKey ? ' selected' : ''}>${esc(skitName(c))}</option>`).join('')
+        return `<div class="row" data-skit-line style="align-items:flex-start">
+          <select data-sf="speaker" style="max-width:130px">${opts}</select>
+          <textarea data-sf="text" style="flex:1;min-height:38px">${esc(l.text)}</textarea>
+          <button class="act" type="button" onclick="skitDelLine(this)">✕</button>
+        </div>`
+      }
+      function renderSkit() {
+        $('skitScript').innerHTML = skitLines ? skitLines.map(skitLineRow).join('') : ''
+        $('skitPlayRow').style.display = skitLines ? 'flex' : 'none'
+      }
+      // 編集中の会話(話者セレクト+テキスト)をDOMから回収。
+      function collectSkit() {
+        return [...document.querySelectorAll('#skitScript [data-skit-line]')]
+          .map((row) => ({ channelKey: row.querySelector('[data-sf="speaker"]').value, text: row.querySelector('[data-sf="text"]').value.trim() }))
+          .filter((l) => l.text)
+      }
+      async function skitGenerate() {
+        const channels = [...document.querySelectorAll('input[data-skit-ck]:checked')].map((i) => i.dataset.skitCk)
+        if (channels.length < 2) { $('skitGenResult').innerHTML = '<span class="err">出演を2チャンネル以上選んでください</span>'; return }
+        if (!val('skitTopic')) { $('skitGenResult').innerHTML = '<span class="err">お題を入力してください</span>'; return }
+        $('skitGenResult').textContent = '会話を考え中…(数十秒〜数分かかります)'
+        try {
+          const r = await api('/api/skit/generate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channels, topic: val('skitTopic'), minutes: Number($('skitMinutes').value), research: $('skitResearch').checked }),
+          })
+          if (!r.ok) throw new Error(r.error || '失敗')
+          skitLines = r.lines
+          renderSkit()
+          const m = Math.floor(r.estSeconds / 60), s = r.estSeconds % 60
+          $('skitGenResult').innerHTML = `<span class="ok">${r.lines.length}セリフ・${r.totalChars}文字(推定 ${m ? m + '分' : ''}${s}秒)${r.researched ? ' · Web下調べ済' : ''}</span>`
+        } catch (e) { $('skitGenResult').innerHTML = `<span class="err">${esc(e.message)}</span>` }
+      }
+      function skitAddLine() {
+        skitLines = collectSkit()
+        skitLines.push({ channelKey: skitCast[0]?.channelKey ?? '', text: '' })
+        renderSkit()
+      }
+      function skitDelLine(btn) { btn.closest('[data-skit-line]').remove() }
+      let skitPoll = null
+      async function skitPlay() {
+        const lines = collectSkit()
+        if (!lines.length) { $('skitPlayResult').innerHTML = '<span class="err">会話が空です</span>'; return }
+        $('skitPlayResult').textContent = '開始中…'
+        try {
+          const r = await api('/api/skit/play', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lines }) })
+          if (!r.ok) throw new Error(r.error || '失敗')
+          clearInterval(skitPoll)
+          skitPoll = setInterval(async () => {
+            try {
+              const s = await api('/api/skit/status')
+              if (s.playing) $('skitPlayResult').innerHTML = `<span class="ok">▶ 再生中 ${s.line}/${s.total}</span>`
+              else { clearInterval(skitPoll); $('skitPlayResult').innerHTML = '<span class="ok">再生終了</span>' }
+            } catch {}
+          }, 1000)
+        } catch (e) { $('skitPlayResult').innerHTML = `<span class="err">${esc(e.message)}</span>` }
+      }
+      async function skitStop() {
+        await api('/api/skit/stop', { method: 'POST' })
+        $('skitPlayResult').textContent = '停止します(今のセリフの後)…'
+      }
+      // --- 統合タイムライン(会話 + イベント, サーバ側フィルタ+ページング) ------
+      const TL_PAGE = 50
+      let tlOffset = 0, tlTotal = 0, tlWhoLoaded = false
+      // 会話行: user=話しかけた人、assistant行=そのキャラ。イベント: characterあれば🤖、無ければsystem。
+      function tlWho(i) {
+        if (i.category === 'conv') {
+          if (i.kind === 'user') return `👤 人${i.label ? '(' + esc(i.label) + 'に)' : ''}`
+          return `🤖 ${esc(i.character || i.label || 'キャラ')}`
+        }
+        return i.character ? `🤖 ${esc(i.character)}` : '<span class="muted">⚙️ system</span>'
+      }
+      function tlUnit(i) {
+        if (i.label) return esc(i.label)
+        if (i.device) return `<span class="muted">${esc(String(i.device).slice(0, 8))}</span>`
+        return ''
+      }
+      function tlKindLabel(i) {
+        if (i.category === 'conv') return i.kind === 'user' ? '会話・人' : '会話'
+        return esc(i.kind)
+      }
+      function tlContent(i) {
+        if (i.category === 'conv') return `${esc(i.text)}${i.source ? ` <span class="muted">[${esc(i.source)}]</span>` : ''}`
+        return `<pre class="j">${esc(JSON.stringify(i.data ?? {}))}</pre>`
+      }
+      // Populate 誰(characters) / チャンネル(channels) dropdowns from config, once.
+      async function tlLoadFilters() {
+        if (tlWhoLoaded) return
+        let cfg = {}
+        try { cfg = await api('/api/config') } catch {}
+        const who = $('tlWho'), dev = $('tlDevice')
+        for (const id of Object.keys(cfg.characters || {})) {
+          const nm = cfg.characters[id]?.name || '(名称未設定)'
+          who.insertAdjacentHTML('beforeend', `<option value="${esc(id)}">🤖 ${esc(nm)} · ${esc(id.slice(0, 8))}</option>`)
+        }
+        for (const [key, b] of Object.entries(cfg.channels || {})) {
+          const hw = key.includes(':') ? key.slice(key.indexOf(':') + 1) : key
+          dev.insertAdjacentHTML('beforeend', `<option value="${esc(hw)}">${esc(b.label || hw)}</option>`)
+        }
+        tlWhoLoaded = true
+      }
+      function tlQuery() {
+        const p = new URLSearchParams({ limit: String(TL_PAGE), offset: String(tlOffset) })
+        const from = $('tlFrom').value, to = $('tlTo').value
+        if (from) p.set('from', new Date(from).toISOString())
+        if (to) p.set('to', new Date(to).toISOString())
+        const kind = $('tlKind').value
+        if (kind === 'conv' || kind === 'event') p.set('category', kind)
+        else if (kind) p.set('kind', kind)
+        if ($('tlWho').value) p.set('who', $('tlWho').value)
+        if ($('tlDevice').value) p.set('device', $('tlDevice').value)
+        return p.toString()
+      }
+      async function refreshTimeline() {
+        await tlLoadFilters()
+        const { items, total } = await api('/api/timeline?' + tlQuery())
+        tlTotal = total || 0
+        $('tlBody').innerHTML = items.length
+          ? items.map((i) => `<tr><td class="ts">${hhmm(i.ts)}</td><td><span class="pill">${tlKindLabel(i)}</span></td><td>${tlWho(i)}</td><td>${tlUnit(i)}</td><td>${tlContent(i)}</td></tr>`).join('')
+          : '<tr><td colspan="5" class="muted">該当なし</td></tr>'
+        const from = tlTotal === 0 ? 0 : tlOffset + 1
+        const to = Math.min(tlOffset + TL_PAGE, tlTotal)
+        $('tlPageInfo').textContent = `${from}–${to} / ${tlTotal}件`
+        $('tlPrev').disabled = tlOffset <= 0
+        $('tlNext').disabled = tlOffset + TL_PAGE >= tlTotal
+      }
+      function applyTimeline() { tlOffset = 0; refreshTimeline() }
+      function resetTimeline() {
+        for (const id of ['tlFrom', 'tlTo']) $(id).value = ''
+        for (const id of ['tlKind', 'tlWho', 'tlDevice']) $(id).value = ''
+        tlOffset = 0; refreshTimeline()
+      }
+      function pageTimeline(dir) {
+        const next = tlOffset + dir * TL_PAGE
+        if (next < 0 || next >= tlTotal) return
+        tlOffset = next; refreshTimeline()
+      }
+      // --- shared: VOICEVOX speakers + sample playback ------------------------
+      // Tool catalog: channelTools (body ops, chosen on channel) + characterTools
+      // (MCP/knowledge, chosen on character). Loaded once.
+      let toolCat = null
+      async function loadTools() {
+        if (toolCat) return toolCat
+        try { toolCat = await api('/api/tools') } catch { toolCat = { channelTools: [], characterTools: [] } }
+        toolCat.channelTools = toolCat.channelTools || []
+        toolCat.characterTools = toolCat.characterTools || []
+        return toolCat
+      }
+      // Checkbox group for a tool list; `have` = currently-enabled tool names.
+      function toolChecks(tools, have) {
+        const set = new Set(have || [])
+        if (!tools.length) return '<span class="muted">(なし)</span>'
+        return tools
+          .map((t) => `<label style="margin-right:12px;white-space:nowrap"><input type="checkbox" data-tool="${esc(t.name)}"${set.has(t.name) ? ' checked' : ''}> ${esc(t.name)}</label>`)
+          .join('')
+      }
+      function checkedTools(scope) {
+        return [...scope.querySelectorAll('input[data-tool]:checked')].map((i) => i.dataset.tool)
+      }
+      let speakers = null // VOICEVOX speaker styles [{id,label}], loaded once
+      async function loadSpeakers() {
+        if (speakers) return speakers
+        try { speakers = (await api('/api/speakers')).speakers || [] } catch { speakers = [] }
+        return speakers
+      }
+      // Build the <option>s for a speaker <select>, marking the current pick.
+      function speakerOptions(selected, emptyLabel) {
+        const cur = selected ?? ''
+        const opts = [`<option value="">${esc(emptyLabel || '(既定)')}</option>`]
+        for (const s of speakers || []) {
+          const sel = String(s.id) === String(cur) ? ' selected' : ''
+          opts.push(`<option value="${s.id}"${sel}>${esc(s.label)} [${s.id}]</option>`)
+        }
+        if (cur !== '' && !(speakers || []).some((s) => String(s.id) === String(cur))) {
+          opts.push(`<option value="${cur}" selected>ID ${esc(cur)}</option>`)
+        }
+        return opts.join('')
+      }
+      // codex-realtime の声。app-server が落ちていると空で返るので、そのときは
+      // <select> ではなく手入力に落とす(声を選べないだけで設定は開けるように)。
+      let codexVoices = null // 実際に通る声だけ(サーバ側で絞ってある)
+      async function loadCodexVoices() {
+        if (codexVoices) return codexVoices
+        // app-server が黙り込むことがあるので、待ちすぎない。取れなければ手入力に落とす。
+        const timeout = new Promise((resolve) => setTimeout(() => resolve({ voices: [] }), 3000))
+        try { codexVoices = (await Promise.race([api('/api/codex-voices'), timeout])).voices || [] } catch { codexVoices = [] }
+        return codexVoices
+      }
+      // 声のプルダウン。並びはサーバが「いまのモデルで通るもの」だけに絞って返す
+      // (弾かれる名前を選べると、realtime が起動しない形で壊れるため)。
+      function codexVoiceField(selected) {
+        const cur = selected || 'ollama'   // 未設定の古い設定は ollama として選ばせる
+        const list = codexVoices || []
+        if (list.length === 0) {
+          return `<input type="text" data-f="codex.voice" value="${esc(cur)}" placeholder="声(app-server 未起動)" style="width:150px">`
+        }
+        const opts = [`<option value=""${cur === '' ? ' selected' : ''}>(既定)</option>`]
+        for (const name of list) {
+          opts.push(`<option value="${esc(name)}"${name === cur ? ' selected' : ''}>${esc(name)}</option>`)
+        }
+        if (cur && !list.includes(cur)) opts.push(`<option value="${esc(cur)}" selected>${esc(cur)} (使えない)</option>`)
+        return `<select data-f="codex.voice" style="width:150px">${opts.join('')}</select>`
+      }
+      let models = null // ollama model names, loaded once
+      async function loadModels() {
+        if (models) return models
+        try { models = (await api('/api/models')).models || [] } catch { models = [] }
+        return models
+      }
+      function modelOptions(selected) {
+        const cur = selected ?? ''
+        const opts = [`<option value="">(既定)</option>`]
+        for (const m of models || []) {
+          opts.push(`<option value="${esc(m)}"${m === cur ? ' selected' : ''}>${esc(m)}</option>`)
+        }
+        if (cur !== '' && !(models || []).includes(cur)) opts.push(`<option value="${esc(cur)}" selected>${esc(cur)}</option>`)
+        return opts.join('')
+      }
+      // Play a VOICEVOX sample for a speaker id; status shown in resultEl.
+      let sampleAudio = null
+      function playSampleWav(id, name, resultId) {
+        const el = $(resultId)
+        if (!id) { el.innerHTML = '<span class="err">声(既定以外)を選んでください</span>'; return }
+        const text = name ? `こんにちは、${name}です。` : 'こんにちは、スタックちゃんです。'
+        if (sampleAudio) { sampleAudio.pause(); sampleAudio = null }
+        el.innerHTML = '<span class="muted">試聴を合成中…</span>'
+        sampleAudio = new Audio(`/api/tts-sample?speaker=${encodeURIComponent(id)}&text=${encodeURIComponent(text)}`)
+        sampleAudio.onplaying = () => { el.innerHTML = '<span class="ok">▶ 再生中</span>' }
+        sampleAudio.onended = () => { el.textContent = '' }
+        sampleAudio.onerror = () => { el.innerHTML = '<span class="err">試聴に失敗(VOICEVOX未到達?)</span>' }
+        sampleAudio.play().catch((e) => { el.innerHTML = `<span class="err">${esc(e.message)}</span>` })
+      }
+
+      // --- キャラクター --------------------------------------------------
+      let characterConfig = null // full config, edited in place then PUT back
+      // Random character_id (UUID v4). crypto.randomUUID needs a secure context
+      // (https/localhost); on the plain-http LAN we build one from getRandomValues.
+      function newCharacterId() {
+        if (window.isSecureContext && crypto.randomUUID) return crypto.randomUUID()
+        const b = crypto.getRandomValues(new Uint8Array(16))
+        b[6] = (b[6] & 0x0f) | 0x40
+        b[8] = (b[8] & 0x3f) | 0x80
+        const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
+        return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+      }
+      // バックエンドの選択肢。空 = 既定(ollama のループ)。
+      // claude と codex-realtime は速度・経路・使える機能が変わるので注記を出す。
+      const BACKENDS = [
+        ['ollama', 'ollama', '宅内で完結。速い(1〜2秒)。表情ツールが使える'],
+        ['claude', 'Claude', '外部APIへ送信。遅い(8〜15秒)。ツール実行は確実。表情ツールは使えない'],
+        ['codex', 'Codex(テキスト)', '声はVOICEVOXのまま。codexの組み込みツールが使える。app-serverが要る'],
+        ['codex-realtime', 'Codex Realtime', '音声のまま往復。whisper/VOICEVOXを通らず声はOpenAI側。app-serverが要る'],
+      ]
+      function backendOptions(selected) {
+        const cur = selected || 'ollama'   // 未設定の古い設定は ollama として選ばせる
+        return BACKENDS.map(([v, label]) =>
+          `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(label)}</option>`).join('')
+      }
+      // バックエンド固有の行だけを出し、無関係になった行(モデル/声)は薄くする。
+      function applyBackendVisibility(card) {
+        if (!card) return
+        const b = card.querySelector('[data-f="backend"]')?.value || 'ollama'
+        for (const row of card.querySelectorAll('[data-only]')) {
+          row.style.display = row.dataset.only === b ? '' : 'none'
+        }
+        for (const row of card.querySelectorAll('[data-ollama-only]')) {
+          row.style.opacity = b === 'ollama' ? '' : '0.45'
+        }
+        const note = card.querySelector('[data-backend-note]')
+        if (note) note.textContent = (BACKENDS.find(([v]) => v === b) || [])[2] || ''
+      }
+      function charCard(id, a) {
+        return `<div class="card" data-aid="${esc(id)}" style="margin:0 0 10px">
+          <div class="row"><span class="muted" style="font-size:11px">character_id: ${esc(id)}</span>
+            <button class="act" type="button" style="margin-left:auto" onclick="deleteCharacter('${esc(id)}')">削除</button>
+          </div>
+          <div class="row"><span class="muted" style="width:64px">名前</span>
+            <input type="text" data-f="name" value="${esc(a.name || '')}" placeholder="例: しろ" style="width:180px"></div>
+          <div class="row"><span class="muted" style="width:64px">バックエンド</span>
+            <select data-f="backend" style="max-width:200px" onchange="applyBackendVisibility(this.closest('.card'))">
+              ${backendOptions(a.backend)}</select>
+            <span class="muted" data-backend-note style="font-size:11px"></span></div>
+          <div class="row" data-ollama-only><span class="muted" style="width:64px">モデル</span>
+            <select data-f="model" style="max-width:280px">${modelOptions(a.model)}</select></div>
+          <div class="row" data-ollama-only><span class="muted" style="width:64px">声</span>
+            <select data-f="speaker" style="max-width:220px">${speakerOptions(a.speaker)}</select>
+            <button class="act" type="button" onclick="playAsst('${esc(id)}')">▶ 試聴</button></div>
+          <div class="row" data-only="claude"><span class="muted" style="width:64px">Claudeモデル</span>
+            <input type="text" data-f="claudeModel" value="${esc(a.claudeModel || '')}" placeholder="空欄で既定" style="width:220px"></div>
+          <div class="row" data-only="codex"><span class="muted" style="width:64px">Codex</span>
+            <input type="text" data-f="codex.cwd" value="${esc(a.codex?.cwd || '')}" placeholder="作業ディレクトリ(空欄で既定)" style="width:260px">
+            <input type="text" data-f="codex.sandbox" value="${esc(a.codex?.sandbox || '')}" placeholder="sandbox(既定 read-only)" style="width:170px"></div>
+          <div class="row" data-only="codex-realtime"><span class="muted" style="width:64px">Codex</span>
+            <input type="text" data-f="codex.cwd" value="${esc(a.codex?.cwd || '')}" placeholder="作業ディレクトリ(空欄で既定)" style="width:260px">
+            ${codexVoiceField(a.codex?.voice)}</div>
+          <div class="row" data-toolgroup><span class="muted" style="width:64px">ツール</span>
+            ${toolChecks(toolCat?.characterTools || [], a.tools)}</div>
+          <div class="row" style="align-items:flex-start"><span class="muted" style="width:64px">プロンプト</span>
+            <textarea data-f="instructions" placeholder="空欄なら profile の共通指示+名前を使用" style="flex:1;min-height:60px">${esc(a.instructions || '')}</textarea></div>
+          <div class="row"><span class="muted" style="width:64px">聞き取れず</span>
+            <input type="text" data-f="notices.unheard" value="${esc(a.notices?.unheard || '')}" placeholder="空欄なら既定文。半角スペースだけにすると無言" style="flex:1"></div>
+          <div class="row" style="align-items:flex-start"><span class="muted" style="width:64px">繋ぎ言葉</span>
+            <textarea data-fillers placeholder="道具を使っている間の一言。1行に「道具名 = 台詞」。* が既定&#10;例:&#10;* = 検索! 検索!&#10;weather = 天気! 天気!" style="flex:1;min-height:56px">${esc(fillersToText(a.fillers))}</textarea></div>
+        </div>`
+      }
+      function renderCharacters() {
+        const ids = Object.keys(characterConfig.characters) // keep insertion order (ids are random)
+        $('characterList').innerHTML = ids.length
+          ? ids.map((id) => charCard(id, characterConfig.characters[id])).join('')
+          : '<span class="muted">キャラクターがありません。「＋ 新規キャラクター」で追加。</span>'
+        // バックエンド固有の行は、選ばれているものだけ出す(描画直後にも反映する)。
+        for (const card of document.querySelectorAll('#characterList .card[data-aid]')) applyBackendVisibility(card)
+      }
+      async function loadCharacters() {
+        characterConfig = await api('/api/config')
+        characterConfig.characters = characterConfig.characters || {}
+        await loadSpeakers()
+        await loadModels()
+        await loadTools()
+        await loadCodexVoices()
+        renderCharacters()
+        $('characterResult').textContent = ''
+      }
+      // fillers は自由なキーの表なので「道具名 = 台詞」の行で編集させる。
+      // ドット記法(codex.cwd 等)は固定キー向けで、こちらには使えない。
+      function fillersToText(fillers) {
+        if (!fillers) return ''
+        return Object.entries(fillers).map(([k, v]) => `${k} = ${v}`).join('\n')
+      }
+      function textToFillers(text) {
+        const out = {}
+        for (const line of String(text || '').split('\n')) {
+          const at = line.indexOf('=')
+          if (at < 0) continue
+          const k = line.slice(0, at).trim()
+          const v = line.slice(at + 1).trim()
+          if (k && v) out[k] = v
+        }
+        return Object.keys(out).length ? out : null
+      }
+      function collectCharacters() {
+        if (!characterConfig) return
+        for (const card of document.querySelectorAll('#characterList .card[data-aid]')) {
+          const id = card.dataset.aid
+          const a = { ...characterConfig.characters[id] }
+          for (const inp of card.querySelectorAll('[data-f]')) {
+            const f = inp.dataset.f, v = inp.value.trim()
+            if (f.includes('.')) {   // codex.cwd のような入れ子。空なら消す
+              const [g, k] = f.split('.')
+              const obj = { ...(a[g] || {}) }
+              if (v === '') delete obj[k]
+              else obj[k] = v
+              if (Object.keys(obj).length) a[g] = obj
+              else delete a[g]
+              continue
+            }
+            if (v === '') delete a[f]
+            else a[f] = f === 'speaker' ? Number(v) : v
+          }
+          const fl = card.querySelector('[data-fillers]')
+          if (fl) {
+            const parsed = textToFillers(fl.value)
+            if (parsed) a.fillers = parsed
+            else delete a.fillers
+          }
+          const tg = card.querySelector('[data-toolgroup]')
+          if (tg) a.tools = checkedTools(tg)
+          characterConfig.characters[id] = a
+        }
+      }
+      function addCharacter() {
+        collectCharacters() // keep edits already typed
+        const id = newCharacterId()
+        characterConfig.characters[id] = { name: '' }
+        renderCharacters()
+        const card = document.querySelector(`#characterList .card[data-aid="${id}"]`)
+        card?.querySelector('input[data-f="name"]')?.focus()
+        card?.scrollIntoView({ block: 'center' })
+        $('characterResult').innerHTML = '<span class="muted">新規キャラを追加(名前・声・プロンプトを入れて「保存」)</span>'
+      }
+      function deleteCharacter(id) {
+        collectCharacters()
+        delete characterConfig.characters[id]
+        document.querySelector(`#characterList .card[data-aid="${id}"]`)?.remove()
+        $('characterResult').innerHTML = '<span class="muted">削除しました(「保存」で確定)</span>'
+      }
+      function playAsst(id) {
+        const card = document.querySelector(`#characterList .card[data-aid="${id}"]`)
+        const sid = card?.querySelector('select[data-f="speaker"]')?.value
+        const name = card?.querySelector('input[data-f="name"]')?.value.trim()
+        playSampleWav(sid, name, 'characterResult')
+      }
+      async function saveCharacters() {
+        collectCharacters()
+        const r = await api('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(characterConfig) })
+        $('characterResult').innerHTML = r.ok ? '<span class="ok">保存しました</span>' : `<span class="err">${esc(r.error || '失敗')}</span>`
+      }
+
+      // --- チャンネル(タイプ別) --------------------------------------------
+      let devConfig = null // full config, edited in place then PUT back
+      function characterOptions(selected, characters) {
+        const cur = selected ?? ''
+        const opts = [`<option value="">(未割当)</option>`]
+        for (const id of Object.keys(characters || {})) {
+          const sel = id === cur ? ' selected' : ''
+          const nm = characters[id]?.name || '(名称未設定)'
+          opts.push(`<option value="${esc(id)}"${sel}>${esc(nm)} · ${esc(id.slice(0, 8))}</option>`)
+        }
+        // keep an unknown current id visible (e.g. character deleted)
+        if (cur && !(characters || {})[cur]) opts.push(`<option value="${esc(cur)}" selected>${esc(cur.slice(0, 8))}(不明)</option>`)
+        return opts.join('')
+      }
+      // Known channel types. `id` label describes what the "<type>:<ID>" tail is.
+      const CHANNEL_TYPES = [
+        { type: 'stack-chan', name: 'stack-chan', note: '物理ロボット。接続で自動追加されます。', idLabel: 'hardware_id', ready: true },
+        { type: 'slack', name: 'Slack', note: '今後対応(アダプタ実装で追加)。', idLabel: 'channel_id', ready: false },
+      ]
+      const channelType = (ck) => (ck.includes(':') ? ck.slice(0, ck.indexOf(':')) : ck)
+      const channelTail = (ck) => (ck.includes(':') ? ck.slice(ck.indexOf(':') + 1) : ck)
+      const FACE_TYPES = ['dog', 'simple', 'image']
+      const rgbHex = (r, g, b) => '#' + [r, g, b].map((x) => (Number(x) || 0).toString(16).padStart(2, '0')).join('')
+      function channelRow(ck, b, connected) {
+        const on = connected.has(ck)
+        return `<tr data-ck="${esc(ck)}">
+          <td>${on ? '<span class="pill">接続中</span>' : '<span class="muted">—</span>'}</td>
+          <td class="ts">${esc(channelTail(ck))}</td>
+          <td><input type="text" data-f="label" value="${esc(b.label || '')}" placeholder="例: 1号機" style="width:120px"></td>
+          <td><select data-f="face" style="max-width:100px"><option value="">(既定)</option>${FACE_TYPES.map((f) => `<option value="${f}"${b.face === f ? ' selected' : ''}>${f}</option>`).join('')}</select></td>
+          <td style="white-space:nowrap">前<input type="color" data-fc="primary" value="${rgbHex(b.faceColor?.pr, b.faceColor?.pg, b.faceColor?.pb)}"> 背<input type="color" data-fc="secondary" value="${rgbHex(b.faceColor?.sr, b.faceColor?.sg, b.faceColor?.sb)}"></td>
+          <td><select data-f="character" style="max-width:200px">${characterOptions(b.character, devConfig.characters)}</select></td>
+          <td data-toolgroup>${toolChecks(toolCat?.channelTools || [], b.tools)}</td>
+          <td><textarea data-f="instructions" placeholder="例: 2〜5文で自然に会話" style="min-width:180px;min-height:44px">${esc(b.instructions || '')}</textarea></td>
+        </tr>`
+      }
+      async function loadDevices() {
+        devConfig = await api('/api/config')
+        devConfig.channels = devConfig.channels || {}
+        devConfig.characters = devConfig.characters || {}
+        await loadSpeakers()
+        await loadTools()
+        const { clients } = await api('/api/clients')
+        // Ensure connected units appear as channels.
+        for (const c of clients) if (c.channelKey && !devConfig.channels[c.channelKey]) devConfig.channels[c.channelKey] = {}
+        const connected = new Set(clients.map((c) => c.channelKey).filter(Boolean))
+        // Group channel keys by type, then render one section per known type.
+        const byType = {}
+        for (const ck of Object.keys(devConfig.channels).sort()) (byType[channelType(ck)] ??= []).push(ck)
+        const seen = new Set(CHANNEL_TYPES.map((t) => t.type))
+        const extraTypes = Object.keys(byType).filter((t) => !seen.has(t)).map((t) => ({ type: t, name: t, note: '', idLabel: 'ID', ready: true }))
+        $('channelSections').innerHTML = [...CHANNEL_TYPES, ...extraTypes]
+          .map((t) => {
+            const cks = byType[t.type] || []
+            const head = `<h3 style="font-size:13px;margin:14px 0 6px">${esc(t.name)} <span class="muted" style="font-weight:400;font-size:12px">${esc(t.note)}</span></h3>`
+            if (!cks.length) return head + '<div class="muted" style="margin-bottom:8px">— まだありません —</div>'
+            return head + `<table><thead><tr><th>状態</th><th>${esc(t.idLabel)}</th><th>表示名(label)</th><th>顔</th><th>配色(前/背)</th><th>キャラクター</th><th>ツール</th><th>追加プロンプト</th></tr></thead><tbody>${cks.map((ck) => channelRow(ck, devConfig.channels[ck], connected)).join('')}</tbody></table>`
+          })
+          .join('')
+        $('devResult').textContent = ''
+      }
+      // この機体を正面(0,0)に。保存済みの tiltOffset がサーバ側で加算される。
+      async function testFront(ck) {
+        const hw = channelTail(ck)
+        try {
+          await api('/api/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target: hw, body: { tool: 'move_head', args: { yaw: 0, pitch: 0 } } }) })
+          $('devResult').innerHTML = '<span class="muted">正面へ(補正は「保存」後に反映)</span>'
+        } catch (e) { $('devResult').innerHTML = `<span class="err">${esc(e.message)}</span>` }
+      }
+      // 試聴は「実際に鳴る声」= channel.speaker があればそれ、無ければキャラの声。
+      function playChannel(ck) {
+        const tr = document.querySelector(`#channelSections tr[data-ck="${ck}"]`)
+        const over = tr?.querySelector('select[data-f="speaker"]')?.value
+        const aid = tr?.querySelector('select[data-f="character"]')?.value
+        const a = devConfig.characters[aid] || {}
+        const id = over || a.speaker
+        const name = tr?.querySelector('input[data-f="label"]')?.value.trim() || a.name
+        playSampleWav(id, name, 'devResult')
+      }
+      async function saveDevices() {
+        if (!devConfig) return
+        for (const tr of document.querySelectorAll('#channelSections tr[data-ck]')) {
+          const ck = tr.dataset.ck
+          const b = { ...devConfig.channels[ck] }
+          for (const inp of tr.querySelectorAll('[data-f]')) {
+            const f = inp.dataset.f, v = inp.value.trim()
+            if (v === '') delete b[f]
+            else b[f] = f === 'speaker' || f === 'tiltOffset' ? Number(v) : v
+          }
+          // 配色: 前景(primary)/背景(secondary)の color を faceColor に。両方黒(#000000)なら未設定扱い。
+          const pri = tr.querySelector('input[data-fc="primary"]')?.value || '#000000'
+          const sec = tr.querySelector('input[data-fc="secondary"]')?.value || '#000000'
+          if (pri === '#000000' && sec === '#000000') delete b.faceColor
+          else {
+            const h = (x) => parseInt(x, 16)
+            b.faceColor = { pr: h(pri.slice(1, 3)), pg: h(pri.slice(3, 5)), pb: h(pri.slice(5, 7)), sr: h(sec.slice(1, 3)), sg: h(sec.slice(3, 5)), sb: h(sec.slice(5, 7)) }
+          }
+          const tg = tr.querySelector('[data-toolgroup]')
+          if (tg) b.tools = checkedTools(tg)
+          devConfig.channels[ck] = b
+        }
+        const r = await api('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(devConfig) })
+        $('devResult').innerHTML = r.ok ? '<span class="ok">保存しました</span>' : `<span class="err">${esc(r.error || '失敗')}</span>`
+      }
+
+      async function loadConfig() {
+        const cfg = await api('/api/config')
+        $('cfg').value = JSON.stringify(cfg, null, 2)
+        $('cfgResult').textContent = ''
+      }
+      async function saveConfig() {
+        let parsed
+        try { parsed = JSON.parse($('cfg').value) } catch (e) { $('cfgResult').innerHTML = `<span class="err">JSON構文エラー: ${esc(e.message)}</span>`; return }
+        const r = await api('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed) })
+        $('cfgResult').innerHTML = r.ok ? '<span class="ok">保存しました</span>' : `<span class="err">${esc(r.error || '失敗')}</span>`
+      }
+
+      function refreshSettings() {
+        if (subtab === 'characters') loadCharacters()
+        else if (subtab === 'channels') loadDevices()
+        else if (subtab === 'all' && !$('cfg').value) loadConfig()
+      }
+      function refresh() {
+        refreshClients()
+        if (current === 'timeline') refreshTimeline()
+        if (current === 'settings') refreshSettings()
+      }
+      // Selecting a filter applies immediately (resets to page 1); date needs 適用.
+      for (const id of ['tlKind', 'tlWho', 'tlDevice']) $(id)?.addEventListener('change', applyTimeline)
+      applySubtab(subtab) // restore the saved settings sub-tab
+      applyTab(current) // restore the saved top tab on load
+      refresh()
+      setInterval(refreshClients, 4000)
+      // Auto-refresh the timeline only while viewing the newest page, so paging/
+      // filtering isn't disrupted.
+      setInterval(() => { if (current === 'timeline' && tlOffset === 0) refreshTimeline() }, 5000)
+    </script>
+  </body>
+</html>

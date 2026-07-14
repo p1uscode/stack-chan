@@ -64,10 +64,16 @@ describe('Stack-chan platform manifest', () => {
       const baseCreation = esp32PlatformManifest.platforms[`esp32/${base}`]?.creation
       const creation = esp32PlatformManifest.platforms[`esp32/${subplatform.name}`]?.creation
       assert.ok(baseCreation, `esp32/${base} should define a creation block`)
-      assert.deepEqual(
-        creation,
-        baseCreation,
-        `esp32/${subplatform.name} should reuse the esp32/${base} creation block`,
+      assert.ok(creation, `esp32/${subplatform.name} should define a creation block`)
+      // A subplatform may grow the base's chunk allocation (m5stackchan_cores3 holds
+      // whole TTS replies as WAV in the chunk heap), but never shrink it, and the
+      // rest of the block must stay the base's.
+      const { chunk, ...rest } = creation
+      const { chunk: baseChunk, ...baseRest } = baseCreation
+      assert.deepEqual(rest, baseRest, `esp32/${subplatform.name} should reuse the esp32/${base} creation block`)
+      assert.ok(
+        chunk.initial >= baseChunk.initial && chunk.incremental >= baseChunk.incremental,
+        `esp32/${subplatform.name} chunk must be at least the esp32/${base} chunk`,
       )
     }
   })

@@ -49,7 +49,9 @@ function isProductionManifest(path: string): boolean {
   return (
     /[/\\]manifest(?:_[^/\\]+)?\.json$/.test(path) &&
     !path.endsWith('manifest.test.json') &&
-    !path.endsWith('manifest_local.json')
+    !path.endsWith('manifest_local.json') &&
+    // Untracked per-device config (Wi-Fi/gateway/secrets); absent on a fresh clone.
+    !path.endsWith('manifest_private.json')
   )
 }
 
@@ -386,9 +388,13 @@ test('shared fakes live in modules/testing and module-local fakes stay under mod
   }
 })
 
+// The MOD this robot actually runs, as opposed to the upstream samples. It sits at
+// the mods root because it is the product, not an example to copy from.
+const APPLICATION_MODS = ['remote']
+
 test('sample MOD manifests live under mods/examples', () => {
   const rootModManifests = readdirSync('mods', { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name !== 'examples')
+    .filter((entry) => entry.isDirectory() && entry.name !== 'examples' && !APPLICATION_MODS.includes(entry.name))
     .map((entry) => join('mods', entry.name, 'manifest.json'))
     .filter(existsSync)
 

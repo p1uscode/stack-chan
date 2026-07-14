@@ -2,6 +2,8 @@ export type StartNetworkConnectionOptions = {
   ssid: string
   password: string
   scanBeforeConnect?: boolean
+  connectionTimeoutMs?: number
+  reconnectDelayMs?: number
   onStateChanged?: (state: unknown) => void
   onConnected?: () => void
   onError?: (reason?: string) => void

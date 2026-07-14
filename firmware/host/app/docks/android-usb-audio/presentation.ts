@@ -310,3 +310,9 @@ export function createUsbAudioPresentation(context: StackchanContext): UsbAudioP
     },
   }
 }
+
+// Modules.importNow('stackchan-usb-dock-presentation') returns the module's
+// DEFAULT export (XS mods contract) — dock.ts resolves the factory through it,
+// so a named export alone leaves importNow returning undefined and activation
+// throws "does not export a presentation factory".
+export default createUsbAudioPresentation

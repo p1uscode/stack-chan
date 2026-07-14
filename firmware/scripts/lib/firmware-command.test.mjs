@@ -33,10 +33,11 @@ test('MOD command honors the release build mode', () => {
   assert.doesNotMatch(output, /mcrun -d /)
 })
 
-test('MOD command installs the instrument archive from its own output directory', () => {
+// instrument reads back from the release directory — mcrun -i writes there.
+test('MOD command installs the instrument archive from where mcrun writes it', () => {
   const output = dryRun('--mode=instrument', '-t', 'build')
   assert.match(output, /mcrun -i -m /)
-  assert.match(output, /MOD archive=.*\/bin\/esp32\/instrument\/look_around\/look_around\.xsa/)
+  assert.match(output, /MOD archive=.*\/bin\/esp32\/release\/look_around\/look_around\.xsa/)
 })
 
 test('MOD build command produces a release archive without planning a device write', () => {

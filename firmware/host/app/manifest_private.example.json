@@ -1,0 +1,45 @@
+{
+  "//": "Copy to manifest_private.json and fill in your own values (Wi-Fi, gateway, CF-Access). gitignored — never commit real secrets. manifest_local.json ではなくこの名前を使うこと: あちらは upstream が空configで追跡しているので、upstream系をcheckoutすると中身が消える。音声対話(LLM/TTS/STT/MCP)は Mac の gateway が担当。robot側はこれだけ: Wi-Fi(networks)・gateway接続先(gwInternal*/gwExternal*)・首の個体差補正(pitchZeroCal)・外部用CF-Access(access)。接続中Wi-Fiが internal:true の network なら『内部』(ws, gwInternal)、それ以外(モバイル/未知)は『外部』(wss, gwExternal, CF-Access)へ。",
+  "include": ["./manifest_local.json"],
+  "config": {
+    "networks": [
+      {
+        "name": "home",
+        "ssid": "YOUR_SSID",
+        "password": "YOUR_WIFI_PASSWORD",
+        "dns": ["YOUR_DNS_SERVER"],
+        "internal": true
+      },
+      {
+        "name": "mobile",
+        "ssid": "YOUR_MOBILE_SSID",
+        "password": "YOUR_MOBILE_PASSWORD",
+        "dns": ["1.1.1.1"]
+      }
+    ],
+    "record": {
+      "//": "robot がマイク録音して gateway に送る際のパラメータ。",
+      "maxMs": 15000,
+      "silenceMs": 2000,
+      "noSpeechMs": 6000,
+      "rallyMs": 30000,
+      "vadThreshold": 300
+    },
+    "gwInternalHost": "192.168.0.10",
+    "gwInternalPort": 8098,
+    "gwExternalHost": "your-gateway.example.com",
+    "gwExternalPort": 443,
+    "access": {
+      "//": "外部(external)接続時の Cloudflare Access サービストークン。",
+      "clientId": "REPLACE_WITH_CF_ACCESS_CLIENT_ID",
+      "clientSecret": "REPLACE_WITH_CF_ACCESS_CLIENT_SECRET"
+    },
+    "pitchZeroCal": {
+      "//": "hardwareId -> tilt zeroPosition(生値)。首の取付個体差の補正。既定620。",
+      "REPLACE_WITH_HARDWARE_ID": 658
+    },
+    "//ampVolume": "AW88298 のゲイン(省略時 250)。256 が減衰なし、1 下げるごとに 0.5dB 絞る。音量を上げたときに声が割れるならここを下げる: 割れているのはデジタル段ではなくアンプとスピーカーのアナログ段なので、ソフト側の音量では解決しない。個体とケース(スピーカー)ごとに飽和点が違うため、割れない上限は機体ごとに決める。",
+    "ampVolume": 245,
+    "idleOffMinutes": 30
+  }
+}

@@ -24,9 +24,13 @@ export const moddableEspAppProjectName = 'xs_esp32'
 export function resolveModArchivePath({ outputDirectory, mode, projectName }) {
   if (!outputDirectory) throw new Error('MOD output directory is required')
   if (!/^[^/\\]+$/.test(projectName)) throw new Error(`Invalid MOD project name: ${projectName || 'missing'}`)
+  // mcrun emits instrument builds into the release directory — the -i flag adds
+  // instrumentation to an otherwise non-debug build and it does not get a
+  // directory of its own. Look where the archive actually lands, not where the
+  // mode name suggests.
   const outputMode = {
     debug: 'debug',
-    instrument: 'instrument',
+    instrument: 'release',
     release: 'release',
   }[mode]
   if (!outputMode) throw new Error(`Unsupported MOD build mode: ${mode || 'missing'}`)

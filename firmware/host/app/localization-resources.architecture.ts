@@ -26,6 +26,7 @@ const placeholderContracts: Record<string, string[]> = {
   'settings.volumeValue': ['percent'],
   'settings.wifiStatus': ['status'],
   'splash.connecting': ['attempt', 'maxAttempts'],
+  'splash.connectingWithSsid': ['attempt', 'maxAttempts', 'ssid'],
 }
 
 test('firmware localization catalogs have matching keys and placeholders', () => {

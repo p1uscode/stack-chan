@@ -3,6 +3,15 @@ import AudioIn from 'audio-in'
 
 const CHANNELS = 1
 
+export type RecordSilenceOptions = {
+  /** Stop recording after this much continuous silence (only once speech was heard). */
+  silenceMs?: number
+  /** Mean absolute PCM level treated as speech. Tune with the `[mic] level=` trace. */
+  threshold?: number
+  /** Give up when no speech at all was heard within this time from the start. */
+  noSpeechMs?: number
+}
+
 export default class Microphone {
   recording: boolean
   #audioIn: AudioIn | null
@@ -39,12 +48,16 @@ export default class Microphone {
     this.recording = false
   }
 
-  async record(durationMilliSec = 3000): Promise<OwnedAudioBuffer> {
+  async record(durationMilliSec = 3000, silence?: RecordSilenceOptions): Promise<OwnedAudioBuffer> {
     if (this.recording) {
       throw new Error('already recording')
     }
     this.recording = true
     const HEADER_SIZE = 44
+    const silenceMs = silence?.silenceMs ?? 2000
+    const threshold = silence?.threshold ?? 600
+    const noSpeechMs = silence?.noSpeechMs ?? 0
+    const startedAt = Date.now()
 
     return new Promise((resolve, reject) => {
       let writeOffset = 0
@@ -52,13 +65,28 @@ export default class Microphone {
       let wavBuffer: ArrayBuffer
       let dataView: Uint8Array
       let finished = false
+      let speechDetected = false
+      let lastLoudAt = 0
+      let lastLevelLogAt = 0
       const finish = () => {
         if (finished) return
         finished = true
         this.#abortRecording = null
         audioin?.close()
         this.recording = false
-        resolve(ownAudioBuffer(wavBuffer))
+        let out = wavBuffer
+        if (writeOffset < dataView.byteLength) {
+          // Ended early on silence: shrink the WAV and fix the header sizes.
+          out = wavBuffer.slice(0, HEADER_SIZE + writeOffset)
+          const view = new DataView(out)
+          view.setUint32(4, 36 + writeOffset, true)
+          view.setUint32(40, writeOffset, true)
+        }
+        const owned = ownAudioBuffer(out) as OwnedAudioBuffer & { speechDetected?: boolean }
+        if (silence) {
+          owned.speechDetected = speechDetected
+        }
+        resolve(owned)
       }
       const fail = (error: unknown) => {
         if (finished) return
@@ -76,18 +104,46 @@ export default class Microphone {
           channels: CHANNELS,
           onReadable(size) {
             const remaining = dataView.byteLength - writeOffset
-            trace(`${remaining}\n`)
             const chunkSize = Math.min(size, remaining)
             const chunk = this.read(chunkSize)
 
             if (!chunk) {
               finish()
-            } else {
-              dataView.set(new Uint8Array(chunk), writeOffset)
-              writeOffset += chunkSize
-              if (writeOffset >= dataView.byteLength) {
-                finish()
+              return
+            }
+            dataView.set(new Uint8Array(chunk), writeOffset)
+            writeOffset += chunkSize
+
+            if (silence && chunk.byteLength >= 2) {
+              const samples = new Int16Array(chunk as ArrayBuffer, 0, chunk.byteLength >> 1)
+              let sum = 0
+              let count = 0
+              for (let i = 0; i < samples.length; i += 4) {
+                sum += Math.abs(samples[i])
+                count += 1
               }
+              const level = count > 0 ? sum / count : 0
+              const now = Date.now()
+              if (level >= threshold) {
+                speechDetected = true
+                lastLoudAt = now
+              }
+              if (now - lastLevelLogAt >= 1000) {
+                lastLevelLogAt = now
+                trace(`[mic] level=${Math.round(level)} speech=${speechDetected}\n`)
+              }
+              if (speechDetected && now - lastLoudAt >= silenceMs) {
+                finish()
+                return
+              }
+              if (!speechDetected && noSpeechMs > 0 && now - startedAt >= noSpeechMs) {
+                finish()
+                return
+              }
+            }
+
+            if (writeOffset >= dataView.byteLength) {
+              finish()
             }
           },
         })

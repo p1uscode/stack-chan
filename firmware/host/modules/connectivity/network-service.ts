@@ -12,6 +12,11 @@ import Timer from 'timer'
 const MAX_SCANS = 3
 const DEFAULT_CONNECTION_TIMEOUT_MS = 15000
 const DEFAULT_RECONNECT_DELAY_MS = 3000
+// 接続が確立する前の切断イベントを何回まで許すか。ESP32 は初回アソシエーション中に
+// 一過性の disconnect を普通に上げてくる(実測: 直後に association が成功している)。
+// これを即 FAILED にすると、掴みかけの接続を毎回捨てて「何度リトライしても繋がらない」
+// 状態になる。接続タイムアウトは動かしたまま、その予算の中で繋ぎ直す。
+const MAX_PRECONNECT_RETRIES = 3
 
 export type NetworkState = NetworkConnectionStateValue
 export type NetworkStateChanged = (state: NetworkState, reason?: string) => void
@@ -34,6 +39,7 @@ export class NetworkService {
   #connectionTimeout
   #reconnectTimer
   #closed = false
+  #preconnectRetries = 0
   #handleStateChanged: NetworkStateChanged = () => {}
   #handleConnected: () => void = () => {}
   #handleError: (reason?: string) => void = () => {}
@@ -102,6 +108,7 @@ export class NetworkService {
   }
 
   #startConnectionAttempt() {
+    this.#preconnectRetries = 0
     this.#clearConnectionTimeout()
     this.#transition({ type: 'connect-requested' })
     this.#startConnectionTimeout()
@@ -153,6 +160,14 @@ export class NetworkService {
     }
     if (connection <= 200) {
       if (this.#closed) return
+      // まだ一度も繋がっていない間の切断は一過性のことが多いので、接続タイムアウトの
+      // 予算内で繋ぎ直す(状態は CONNECTING のまま、タイマーも止めない)。
+      if (!this.#stateMachine.connectionEstablished && this.#preconnectRetries < MAX_PRECONNECT_RETRIES) {
+        this.#preconnectRetries += 1
+        trace(`WiFi transient disconnect, retrying (${this.#preconnectRetries}/${MAX_PRECONNECT_RETRIES})\n`)
+        this.#wifi.connect(createWiFiConnectOptions(this.#ssid, this.#password))
+        return
+      }
       this.#clearConnectionTimeout()
       this.#transition({ type: 'disconnected' }, 'disconnected')
       if (this.#stateMachine.connectionEstablished) {
@@ -164,6 +179,7 @@ export class NetworkService {
   }
 
   #handleGotIP(): void {
+    this.#preconnectRetries = 0
     this.#clearConnectionTimeout()
     this.#transition({ type: 'got-ip' })
 

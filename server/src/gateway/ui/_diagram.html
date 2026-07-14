@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <style>
+      body { background: #0f1216; color: #c9d1d9; margin: 0; padding: 24px; font-family: system-ui, sans-serif; }
+      .note { font-size: 13px; color: #8b949e; margin: 0 0 16px; }
+      .mermaid { font-size: 16px; }
+    </style>
+  </head>
+  <body>
+    <p class="note">
+      ※ サーバ側(cloudflared + ゲートウェイ + ブレイン)は <b>red 10.10</b> に集約。
+      現状はゲートウェイのみ開発用 MacBook Pro(10.8)で稼働中 → red へ移設予定。<br />
+      ※ ロボ↔ゲートウェイは <b>1本の永続 WebSocket</b>(内部=<code>ws</code> / 外部=<code>wss</code>、接続中Wi-Fiの
+      <code>internal</code> フラグで判定)。会話・mic音声・返答・制御はすべてこの1本(SSE は不使用)。<br />
+      ※ 思考中/発音中に<b>頭タッチで割り込みキャンセル</b>(robot が再生停止 + gw へ <code>cancel</code>、返信破棄・busy即解除)。
+    </p>
+    <pre class="mermaid">
+flowchart LR
+  R["スタックちゃん<br/>remote"]
+  BR["ブラウザ（所有者）"]
+  EXT["外部自動化<br/>ショートカット / IFTTT"]
+
+  subgraph CF["Cloudflare Tunnel（Access で認証）"]
+    subgraph AIO["ai-gateway ／ token: robot"]
+      d_gw["ai-gateway"]
+    end
+    subgraph AUI["ai-ui ／ メール認証"]
+      d_ui["ai-ui"]
+    end
+    subgraph AHK["ai-webhook ／ token: ai-webhook"]
+      d_hk["ai-webhook"]
+    end
+    subgraph ADR["ai-direct ／ token: robot"]
+      d_ol["ai-ollama"]
+      d_wh["ai-whisper"]
+      d_vv["ai-voicevox"]
+      d_mc["ai-mcp"]
+    end
+  end
+
+  subgraph RED["red 10.10"]
+    subgraph GWBOX["ゲートウェイ（1プロセス・複数リスナー）"]
+      GWS["WS :8098<br/>ロボ会話・音声"]
+      GAPI["UI + API :8099<br/>画面 + /api/* 同梱"]
+      GHK["webhook :8100<br/>/event のみ"]
+      STORE[("sqlite<br/>gateway.db")]
+    end
+    BRAIN["ブレイン + ツール<br/>ollama ／ whisper ／ voicevox ／ mcp"]
+  end
+
+  R ==>|"ws/wss: 会話 + mic音声"| d_gw --> GWS
+  BR -->|"画面"| d_ui --> GAPI
+  EXT -->|"POST /event"| d_hk --> GHK
+  ADR -->|"直接続(PC / 他クライアント)"| BRAIN
+
+  GWS -->|"ローカル: STT / LLM / TTS / ツール"| BRAIN
+  GAPI -->|"制御 /api/control"| GWS
+  GHK -->|"push"| GWS
+  GWS -->|"記録"| STORE
+  GAPI -->|"読取 turns/events/config"| STORE
+  GWS ==>|"ws/wss: 返答(body / say / 音声)"| R
+  R -.->|"頭タッチ: cancel（割り込み）"| GWS
+
+  classDef io fill:#12325a,stroke:#4aa3ff,color:#e6e9ee;
+  classDef direct fill:#30353b,stroke:#8b949e,color:#c9d1d9;
+  classDef hook fill:#3b2a5e,stroke:#a371f7,color:#e6e9ee;
+  classDef ui fill:#173d24,stroke:#3fb950,color:#e6e9ee;
+  class d_gw io;
+  class d_ol,d_vv,d_mc,d_wh direct;
+  class d_hk hook;
+  class d_ui ui;
+    </pre>
+    <script>
+      mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
+    </script>
+  </body>
+</html>

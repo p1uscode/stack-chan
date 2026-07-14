@@ -73,6 +73,7 @@ test('StackchanRuntimeAudio forwards borrowed buffers to the target player', asy
       forwarded = next
       return true
     },
+    stop: () => {},
   }
 
   const runtime = new StackchanRuntimeAudio({ tts: fakeTTS(), speaker })
@@ -91,6 +92,7 @@ test('StackchanRuntimeAudio reports unsupported playback as false', async () => 
     speaker: {
       tone: async () => {},
       play: async () => false,
+      stop: () => {},
     },
   })
 
@@ -165,7 +167,7 @@ test('StackchanRuntimeAudio stops WebRadio before starting other playback', asyn
   const runtime = new StackchanRuntimeAudio({
     tts: fakeTTS(),
     webRadio,
-    speaker: { tone: async () => {}, play: async () => true },
+    speaker: { tone: async () => {}, play: async () => true, stop: () => {} },
   })
 
   await runtime.say('hello')
@@ -220,6 +222,7 @@ test('StackchanRuntimeAudio stays busy until all overlapping playback completes'
     speaker: {
       tone: () => new Promise<void>((resolve) => (finishTone = resolve)),
       play: () => new Promise<boolean>((resolve) => (finishPlayback = () => resolve(true))),
+      stop: () => {},
     },
   })
 

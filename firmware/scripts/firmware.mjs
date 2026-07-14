@@ -17,6 +17,7 @@ import {
   writeBuildVariant,
 } from './lib/build-variant.mjs'
 import { aliases, devices, resolveDevice } from './lib/devices.mjs'
+import { assertNotWatchTarget } from './lib/flash-target-guard.mjs'
 import { prepareCoreS3IdfDependencies } from './lib/idf-dependencies.mjs'
 import { installModArchive, resolveModArchivePath } from './lib/mod-flash.mjs'
 import { prepareCoreS3VersionSdkconfig, readModdableVersion } from './lib/moddable-version.mjs'
@@ -67,6 +68,18 @@ const uploadPort =
   readOption(rawArgs, 'port') ?? process.env.STACKCHAN_PORT ?? process.env.UPLOAD_PORT ?? process.env.ESPPORT
 const uploadBaud = readOption(rawArgs, 'baud') ?? process.env.STACKCHAN_BAUD ?? process.env.ESPBAUD
 let subprocessEnvironment = uploadPort ? { ...process.env, UPLOAD_PORT: uploadPort } : process.env
+
+// 実機に書き込むコマンドだけ、焼き先が watch(ハロ)でないことを確かめる。
+// ビルドだけの用途は素通し。STACKCHAN_SKIP_TARGET_CHECK=1 で外せる。
+const FLASHING_COMMANDS = new Set(['deploy', 'flash', 'debug', 'mod'])
+if (!dryRun && FLASHING_COMMANDS.has(command) && process.env.STACKCHAN_SKIP_TARGET_CHECK !== '1') {
+  try {
+    assertNotWatchTarget({ uploadPort, log: (message) => console.error(message) })
+  } catch (error) {
+    console.error(`[stack-chan] ${error.message}`)
+    process.exit(1)
+  }
+}
 
 if (!dryRun && deviceName === 'm5stackchan_cores3' && command !== 'mod' && command !== 'mod:build') {
   try {

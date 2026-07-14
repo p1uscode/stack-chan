@@ -12,4 +12,8 @@ export default class Speaker {
   play(_buffer: BorrowedAudioBuffer): Promise<boolean> {
     throw new Error('speaker fake is type-only')
   }
+
+  stop(): void {
+    throw new Error('speaker fake is type-only')
+  }
 }

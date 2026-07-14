@@ -18,6 +18,7 @@ import type {
 import type { Emotion, FaceEyeKey, FaceThemeKey } from 'face-state'
 import { LocalPeerError, type LocalPeerSession } from 'local-peer-types'
 import { createI18nCapability } from 'localization'
+import type { RecordSilenceOptions } from 'microphone'
 import { MotionController, type MotionControllerConstructorParam } from 'motion-controller'
 import { OwnedResources } from 'owned-resources'
 import { type RuntimeAudioConstructorParam, StackchanRuntimeAudio } from 'runtime-audio'
@@ -192,6 +193,16 @@ export class StackchanRuntimeContext implements StackchanContext {
   }
 
   /**
+   * The active motion driver. Exposed so a MOD can reach servo-level controls
+   * (e.g. M5StackChanServoDriver.setPitchConfig for neck travel limits and
+   * per-unit mount-offset) that the high-level pose API does not surface. Type varies by
+   * driver, so MOD callers must guard.
+   */
+  get driver() {
+    return this.#motionController.driver
+  }
+
+  /**
    * get Microphone
    *
    * @returns Microphone instance
@@ -238,8 +249,12 @@ export class StackchanRuntimeContext implements StackchanContext {
     return this.#audioRuntime.sing(koe, volume)
   }
 
-  async record(durationMilliSec?: number): Promise<OwnedAudioBuffer> {
-    return this.#audioRuntime.record(durationMilliSec)
+  async record(durationMilliSec?: number, silence?: RecordSilenceOptions): Promise<OwnedAudioBuffer> {
+    return this.#audioRuntime.record(durationMilliSec, silence)
+  }
+
+  stopRecording(): void {
+    this.#audioRuntime.stopRecording()
   }
 
   /**
@@ -254,6 +269,11 @@ export class StackchanRuntimeContext implements StackchanContext {
 
   async playAudio(buffer: BorrowedAudioBuffer): Promise<boolean> {
     return this.#audioRuntime.playAudio(buffer)
+  }
+
+  /** Immediately stops an in-flight playAudio() (barge-in cancel). */
+  stopPlayback(): void {
+    this.#audioRuntime.stopPlayback()
   }
 
   /**
@@ -454,14 +474,20 @@ export class StackchanRuntimeContext implements StackchanContext {
       sing(koe, volume) {
         return context.sing(koe, volume)
       },
-      record(durationMilliSec) {
-        return context.record(durationMilliSec)
+      record(durationMilliSec, silence) {
+        return context.record(durationMilliSec, silence)
+      },
+      stopRecording() {
+        context.stopRecording()
       },
       tone(hz, duration, volume) {
         return context.tone(hz, duration, volume)
       },
       playAudio(buffer) {
         return context.playAudio(buffer)
+      },
+      stopPlayback() {
+        context.stopPlayback()
       },
       get webRadio() {
         return context.#audioRuntime.webRadio

@@ -15,6 +15,7 @@ export type IconName =
   | 'offline'
   | 'palette'
   | 'play'
+  | 'restart'
   | 'retry'
   | 'scan'
   | 'settings'
@@ -129,6 +130,17 @@ function drawIcon(port: PiuPort, icon: IconName, color: string) {
         const width = 9 - Math.abs(row)
         if (width > 0) port.fillColor(color, cx - 4, cy + row, width, 2)
       }
+      return
+    case 'restart':
+      // Power glyph (ring with a gap at the top + a vertical bar). Deliberately
+      // different from 'retry', which shares a screen with it on the Wi-Fi
+      // recovery view.
+      port.fillColor(color, cx - 8, cy - 4, 2, 10)
+      port.fillColor(color, cx + 6, cy - 4, 2, 10)
+      port.fillColor(color, cx - 6, cy + 6, 12, 2)
+      port.fillColor(color, cx - 8, cy - 6, 5, 2)
+      port.fillColor(color, cx + 3, cy - 6, 5, 2)
+      port.fillColor(color, cx - 1, cy - 10, 2, 8)
       return
     case 'retry':
       port.fillColor(color, cx - 7, cy - 7, 13, 3)

@@ -1,0 +1,20 @@
+{
+  "//": "実行は tsx(esbuild で型を剥がして直接実行)。tsc はコンパイルせず型チェックのみ(npm run typecheck)。型チェックは緩め: 段階的に型を付けていく前提。",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "useUnknownInCatchVariables": false,
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

@@ -7,6 +7,7 @@ import type IMU from 'imu'
 import type { ButtonInputEvent } from 'input-event'
 import type { LocalPeerCapability } from 'local-peer-types'
 import type { I18nCapability } from 'localization'
+import type { RecordSilenceOptions } from 'microphone'
 import type { MiniAppRegistryCapability } from 'mini-app'
 import type { MotionControllerPose, MotionDurationSeconds } from 'motion-controller'
 import type { Container as PiuContainer, Content as PiuContent } from 'piu/MC'
@@ -114,7 +115,7 @@ export type MotionCapability = {
 export type AudioCapability = {
   tts: TTS
   microphone?: {
-    record(durationMilliSec?: number): Promise<OwnedAudioBuffer>
+    record(durationMilliSec?: number, silence?: RecordSilenceOptions): Promise<OwnedAudioBuffer>
   }
   /**
    * Replaces the TTS engine and rebinds playback lifecycle callbacks.
@@ -124,7 +125,9 @@ export type AudioCapability = {
   say(text: string, volume?: number): Promise<Maybe<string>>
   /** Sings raw koe notation. Returns a failure when the active TTS does not support singing. */
   sing(koe: string, volume?: number): Promise<Maybe<string>>
-  record(durationMilliSec?: number): Promise<OwnedAudioBuffer>
+  record(durationMilliSec?: number, silence?: RecordSilenceOptions): Promise<OwnedAudioBuffer>
+  /** Aborts an in-flight record(); its promise rejects with "recording aborted". */
+  stopRecording(): void
   tone(hz: number, duration: number, volume?: number): Promise<void>
   /**
    * Attempts to play an audio buffer.
@@ -132,6 +135,8 @@ export type AudioCapability = {
    * the buffer is empty, or playback fails.
    */
   playAudio(buffer: BorrowedAudioBuffer): Promise<boolean>
+  /** Immediately stops an in-flight playAudio() (barge-in cancel); its promise resolves false. */
+  stopPlayback(): void
   /** Continuous MP3 streaming, available only on supported targets. */
   webRadio?: WebRadioCapability
 }

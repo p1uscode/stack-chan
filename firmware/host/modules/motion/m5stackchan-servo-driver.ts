@@ -136,6 +136,24 @@ export class M5StackChanServoDriver {
     this.#rotationErrorResult.reason = reason
     callback(this.#rotationErrorResult)
   }
+
+  /**
+   * Override the tilt axis config at runtime, after construction. Exists so a MOD
+   * can own the values (which are body/mount dependent, not protocol facts) while
+   * this driver keeps the generic defaults: `angleLimit` for how far the neck may
+   * travel before it hits the body, `zeroPosition` for per-unit horn mount offset
+   * (shifting the raw front reference lines the whole range up with other units,
+   * which a gateway-side offset cannot do — that only shifts the input and then
+   * gets clipped by the clamp).
+   */
+  setPitchConfig(overrides: Partial<M5StackChanServoConfig['pitch']>): void {
+    this.#config.pitch = {
+      ...this.#config.pitch,
+      ...overrides,
+      angleLimit: { ...this.#config.pitch.angleLimit, ...overrides.angleLimit },
+      rawPositionLimit: { ...this.#config.pitch.rawPositionLimit, ...overrides.rawPositionLimit },
+    }
+  }
 }
 
 class PY32ServoPower {

@@ -15,13 +15,15 @@ test('resolves mcrun archives using the observable output contract', () => {
     }),
     '/repo/firmware/dist/bin/esp32/debug/look_around/look_around.xsa',
   )
+  // instrument shares the release directory: mcrun -i produces an instrumented
+  // non-debug build and does not create a directory of its own.
   assert.equal(
     resolveModArchivePath({
       outputDirectory: '/repo/firmware/dist',
       mode: 'instrument',
       projectName: 'look_around',
     }),
-    '/repo/firmware/dist/bin/esp32/instrument/look_around/look_around.xsa',
+    '/repo/firmware/dist/bin/esp32/release/look_around/look_around.xsa',
   )
   assert.equal(
     resolveModArchivePath({

@@ -1,7 +1,33 @@
-import type { Port as PiuPort } from 'piu/MC'
-import { Container, Content, Label, Port, Skin } from 'piu/MC'
+import { readableInk } from 'face-skin'
+import type { Port as PiuPort, Style as PiuStyle } from 'piu/MC'
+import { Container, Content, Label, Port, Skin, Style } from 'piu/MC'
 import { ActionButton } from 'ui-controls'
 import { UI, uiStyles } from 'ui-theme'
+
+// In face mode the bar is transparent, so its ink sits directly on the face
+// background. A fixed colour disappears whenever the two match — a white face
+// hid the battery indicator entirely — so flip only when they collide.
+const THEME_INK = 0xffffff // UI.colors.text as a number, for the contrast check
+const barInkNumber = () => readableInk(THEME_INK)
+const toHex = (color: number) => `#${color.toString(16).padStart(6, '0')}`
+const barInk = () => {
+  const ink = barInkNumber()
+  return ink === THEME_INK ? UI.colors.text : toHex(ink)
+}
+
+// The clock's colour lives in a Style, so it cannot follow barInk() by itself.
+// Keep one Style per ink and swap the label's style when the background flips.
+let flippedClockStyle: PiuStyle | null = null
+let flippedClockInk = -1
+function clockStyleFor(base: PiuStyle): PiuStyle {
+  const ink = barInkNumber()
+  if (ink === THEME_INK) return base
+  if (!flippedClockStyle || flippedClockInk !== ink) {
+    flippedClockInk = ink
+    flippedClockStyle = new Style({ font: 'k8x12-24', color: toHex(ink), horizontal: 'center' })
+  }
+  return flippedClockStyle
+}
 
 export const ChatStatusBarState = Object.freeze({
   FAILED: 0,
@@ -140,6 +166,7 @@ class IndicatorBehavior extends Behavior {
 }
 
 class ClockBehavior extends Behavior implements ClockBehaviorContract {
+  #baseStyle?: PiuStyle
   #data?: ClockData
   #displaying = false
   #visible = true
@@ -182,6 +209,9 @@ class ClockBehavior extends Behavior implements ClockBehaviorContract {
 
   update(label: Label) {
     const value = formatAppBarTime(this.#data?.now() ?? new Date())
+    const style = clockStyleFor(this.#baseStyle ?? label.style)
+    if (this.#baseStyle === undefined) this.#baseStyle = label.style
+    if (label.style !== style) label.style = style
     if (value === this.#lastValue) return
     this.#lastValue = value
     label.string = value
@@ -246,7 +276,7 @@ class BatteryBehavior extends Behavior implements BatteryBehaviorContract {
   }
 
   onDraw(port: PiuPort) {
-    const color = UI.colors.text
+    const color = barInk()
     port.fillColor(color, 0, 2 * faceStatusScale, 20 * faceStatusScale, 2 * faceStatusScale)
     port.fillColor(color, 0, 12 * faceStatusScale, 20 * faceStatusScale, 2 * faceStatusScale)
     port.fillColor(color, 0, 4 * faceStatusScale, 2 * faceStatusScale, 8 * faceStatusScale)

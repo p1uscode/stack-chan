@@ -1,6 +1,7 @@
 import type { BorrowedAudioBuffer, OwnedAudioBuffer } from 'audio-buffer'
 import type { TTS, WebRadioCapability, WebRadioStartOptions } from 'capabilities'
 import type Microphone from 'microphone'
+import type { RecordSilenceOptions } from 'microphone'
 import type Speaker from 'speaker'
 import { type Maybe, noop, waitForCompletion } from 'stackchan-util'
 
@@ -117,11 +118,21 @@ export class StackchanRuntimeAudio {
     }
   }
 
-  async record(durationMilliSec?: number): Promise<OwnedAudioBuffer> {
+  async record(durationMilliSec?: number, silence?: RecordSilenceOptions): Promise<OwnedAudioBuffer> {
     if (!this.#microphone) {
       throw Error('This device does not support a microphone.')
     }
-    return this.#microphone.record(durationMilliSec)
+    return this.#microphone.record(durationMilliSec, silence)
+  }
+
+  /** Aborts an in-flight record(); its promise rejects with "recording aborted". */
+  stopRecording(): void {
+    this.#microphone?.stop()
+  }
+
+  /** Immediately stops an in-flight playAudio() (barge-in cancel); its promise resolves false. */
+  stopPlayback(): void {
+    this.#speaker?.stop()
   }
 
   async tone(hz: number, duration: number, volume?: number): Promise<void> {

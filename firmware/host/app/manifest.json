@@ -84,10 +84,14 @@
       "transmit": 17,
       "receive": 16
     },
-    "enablePowerButton": true
+    "enablePowerButton": true,
+    "tts": {
+      "//": "Rate of the err-fail resource baked below; tts-local would otherwise default to 11025 and play it slow.",
+      "sampleRate": 24000
+    }
   },
   "resources": {
-    "*": ["./strings/*"],
+    "*": ["./strings/*", "../../mods/remote/assets/err-fail"],
     "*-mask": [
       "$(MODDABLE)/examples/assets/fonts/OpenSans-Regular-24",
       {

@@ -63,6 +63,11 @@ function installBareSpecifierPackages(): void {
     hasDefaultExport: true,
   })
   writeAliasPackage(hostRoot, 'stored-wifi', resolve(modulesRoot, 'connectivity/stored-wifi.js'))
+  // host/app/boot-services.js resolves bare specifiers from hostRoot, not modulesRoot.
+  writeAliasPackage(hostRoot, 'consts', resolve(modulesRoot, 'preferences/consts.js'))
+  writeAliasPackage(hostRoot, 'preference', resolve(modulesRoot, 'testing/fakes/preference.js'), {
+    hasDefaultExport: true,
+  })
 }
 
 async function setup(values: Record<string, unknown> = {}, configValues: Record<string, unknown> = {}) {
@@ -134,6 +139,34 @@ test('startHostBootServices starts stored Wi-Fi with scan before connect when ho
 
   assert.deepEqual(credentials(networkManager.getStartedConnections()), [{ ssid: 'boot-ap', password: 'boot-secret' }])
   assert.equal(networkManager.getStartedConnections()[0]?.scanBeforeConnect, true)
+  networkManager.completeLastConnection()
+  assert.deepEqual(await services.connectivity.network?.ready, { status: 'connected' })
+})
+
+test('startHostBootServices retries without scanning after the first attempt fails', async () => {
+  // 実測で多い失敗は「スキャンでAPを見つけた直後の association が即 disconnect」。
+  // スキャン直後の無線状態が原因と見られるので、リトライは直接 connect に切り替える。
+  const { networkManager, preference } = await setup({
+    'wifi.ssid': 'boot-ap',
+    'wifi.password': 'boot-secret',
+  })
+  const { startHostBootServices } = await import('../../../app/boot-services.js')
+
+  preference.resetPreference({ 'wifi.ssid': 'boot-ap', 'wifi.password': 'boot-secret' })
+  networkManager.resetNetworkManager()
+  const services = startHostBootServices({ wifi: { retryDelayMs: 0 } })
+
+  networkManager.failLastConnection('connection failed')
+  // リトライ間隔は wait() = 偽 Timer なので、進めてやらないと次の接続が始まらない。
+  const timer = (await import('../../testing/fakes/timer.js')).default
+  for (let i = 0; i < 5 && networkManager.getStartedConnections().length < 2; i += 1) {
+    timer.advance(1)
+    await new Promise((resolve) => setTimeout(resolve, 1))
+  }
+
+  const started = networkManager.getStartedConnections()
+  assert.equal(started[0]?.scanBeforeConnect, true, '1回目はスキャンしてから繋ぐ')
+  assert.equal(started[1]?.scanBeforeConnect, false, '2回目以降はスキャンしない')
   networkManager.completeLastConnection()
   assert.deepEqual(await services.connectivity.network?.ready, { status: 'connected' })
 })

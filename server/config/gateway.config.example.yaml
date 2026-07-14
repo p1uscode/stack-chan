@@ -1,0 +1,57 @@
+//: "gateway.config.yaml にコピーして自分の値を入れる(実設定は gitignore)。解決は: common(接続共通) + character(人格+model+speaker) + channel(宿り先の上書き)。robotのhello{profile}名(internal/external)は接続ログに残るが、解決はcommon共通(profile差分は現状なし)。実IP・実ホスト名・ロボの hardwareId をこのサンプルに書かないこと。"
+common:
+  //: 全プロファイル共通の接続基盤。AI基盤(ollama/voicevox/whisper)と MCP のエンドポイント。別ホストに置くなら http://<host>:<port> をそのまま書く。
+  ollama: http://YOUR_AI_HOST:11434
+  voicevox: http://YOUR_AI_HOST:50021
+  whisper: http://YOUR_AI_HOST:8080
+  mcp: http://127.0.0.1:8097/mcp
+  //claudePath: backend=claude が起動する Claude Code の実行ファイル。未指定なら SDK 同梱版(版が固定・一時ディレクトリへ展開)を使う。インストール済み CLI を指すと実体が1つに揃うが、CLI の自動更新で SDK と噛み合わなくなる可能性がある。パスが存在しなければ警告を出して既定へ落ちる。
+  claudePath: ""
+  ttsRate: 16000
+  //ttsLoudness: 合成音のラウドネス整形。VOICEVOX の出力は話者ごとにピークが -5〜-11dBFS とばらつくので、targetPeakDb に揃える。これで「この音量なら割れない」が話者に依らず決まる。**既定は圧縮せずピークを揃えるだけ**(ratio: 1)。全項目とも省略可(既定は src/gateway/tts-loudness.ts)。切るなら enabled: false。
+  //ttsLoudness の注意: ratio を上げて平均を持ち上げるのは**機体を選ぶ**。stack-chan はアナログ段で飽和するのでピークを下げれば効くが、ハロ(M5Unified)はソフト増幅の後に INT16 でクリップするため、平均を上げた分だけ割れる時間が増えるだけになる(実測で悪化)。上げるなら channel 単位で。
+  //ttsLoudness の項目: highPassHz=低域を落とすカットオフ(0で無効)、thresholdDb=ここを超えた分を圧縮、ratio=圧縮比(1で圧縮なし)、kneeDb=閾値前後を滑らかに繋ぐ幅、attackMs/releaseMs=エンベロープの追従(attackを声の一周期=4〜10msより短くすると波形を追って歪む。releaseを長くしすぎると一様減衰になり正規化で相殺される)、targetPeakDb=整形後のピーク(一番大きい話者より下に置くこと)。
+  //ttsLoudness:
+  //  enabled: true
+  //  ratio: 1
+  //  targetPeakDb: -9
+  historyLimit: 12
+  compactKeep: 4
+characters:
+  //: 人格(キャラクター、チャネル非依存)。キーは乱数UUID。name=名前、model=使うLLM、instructions=口調などの人格、speaker=VOICEVOXの話者ID、tools=使わせるMCPツール。
+  REPLACE_WITH_CHARACTER_UUID:
+    name: YOUR_CHARACTER_NAME
+    model: YOUR_LLM_MODEL
+    instructions: 明るくフレンドリーな口調で話します。
+    speaker: 3
+    tools:
+      - web_search
+      - local_docs
+    //backend: 会話バックエンド。省略=ollama(whisper→LLM→VOICEVOX)。'claude'=Claude Agent SDK。'codex'=Codex(テキスト往復。whisper/VOICEVOXは通るので声はキャラのまま。gateway が codex app-server を自分で起こすので常駐は不要)。'codex-realtime'=OpenAI Realtime(音声のまま往復。whisper/VOICEVOXは通らず、声はOpenAI側。**この場合だけ** app-server の常駐が要る)。どちらも ChatGPT ログイン済みの codex CLI 0.145+ が要る。
+    //codex: backend='codex' / 'codex-realtime' で使う。cwd=Codexの作業ディレクトリ(承認や参照の基点)、sandbox=省略時 read-only、voice=OpenAIの声(spruce/cove等、realtimeのみ)、prompt=省略時は instructions を使う(realtimeのみ)。
+    //codex.path: codex 実行ファイル。省略時は CODEX_BIN → /opt/homebrew/bin/codex → /usr/local/bin/codex → ~/.local/bin/codex → PATH の順で探す。launchd 起動だと PATH が素になるので、見つからないときだけ書く。
+    //codex.socket: 既に走っている app-server の unix socket に相乗りしたいときだけ書く(省略時 backend='codex' は自分で起こす。realtime は省略時 ~/.codex/app-server-control/app-server-control.sock を見る)。
+    //fillers: 道具を使っている間の繋ぎ言葉(黙らないため)。キーは道具名で、mcp__<server>__ の前置きは落とした形で書く(weather / web_search 等)。"*" は既定。人格ごとに口調が違うので、ここで持たせる。未設定なら組み込みの既定文が使われる。
+    fillers:
+      "*": ちょっと調べますね。
+      weather: 空を見てきますね。
+channels:
+  //: 宿り先=そのチャネル固有の前提。キーは (stack-chan:<hardwareId>) 等。label=表示名、character=宿す人格のUUID、tools=そのチャネルで使えるボディツール、instructions=宿り先固有の前提、faceColor=顔の配色(p*=primary, s*=secondary)、face=顔の種類。
+  stack-chan:REPLACE_WITH_HARDWARE_ID:
+    label: YOUR_ROBOT_LABEL
+    character: REPLACE_WITH_CHARACTER_UUID
+    tools:
+      - set_emotion
+      - move_head
+      - set_led
+      - action
+      - start_skit
+    instructions: あなたは手のひらサイズの小さなロボットです。長すぎる説明や箇条書きは避け、自然な会話にしてください。
+    faceColor:
+      pr: 0
+      pg: 0
+      pb: 0
+      sr: 255
+      sg: 255
+      sb: 255
+    face: simple

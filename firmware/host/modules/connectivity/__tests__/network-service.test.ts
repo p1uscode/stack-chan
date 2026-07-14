@@ -66,6 +66,52 @@ test('NetworkService connects through ECMA-419 Wi-Fi and resolves after IP addre
   service.close()
 })
 
+test('NetworkService retries a transient disconnect that arrives before the connection is established', async () => {
+  // ESP32 は初回アソシエーション中に一過性の disconnect を上げることがあり、実測では
+  // その直後に association が成功していた。ここで即エラーにすると掴みかけの接続を
+  // 捨ててしまうので、接続タイムアウトの予算内で繋ぎ直す。
+  const { NetworkService } = await setup()
+  let connected = false
+  let failure: string | undefined
+  const service = new NetworkService({ ssid: 'stackchan-ap', password: 'secret' })
+
+  service.connect(
+    () => {
+      connected = true
+    },
+    (reason) => {
+      failure = reason
+    },
+  )
+
+  const wifi = getFakeWiFiInstances()[0]
+  wifi?.disconnect()
+  assert.equal(failure, undefined, '1回目の切断では失敗にしない')
+
+  wifi?.emitGotIP('192.0.2.30')
+  assert.equal(connected, true)
+  assert.equal(failure, undefined)
+  service.close()
+})
+
+test('NetworkService gives up once transient disconnects exceed the retry budget', async () => {
+  const { NetworkService } = await setup()
+  let failure: string | undefined
+  const service = new NetworkService({ ssid: 'stackchan-ap', password: 'secret' })
+
+  service.connect(
+    () => {},
+    (reason) => {
+      failure = reason
+    },
+  )
+
+  const wifi = getFakeWiFiInstances()[0]
+  for (let i = 0; i < 4; i += 1) wifi?.disconnect()
+  assert.equal(failure, 'connection failed', '再試行を使い切ったら失敗を返す')
+  service.close()
+})
+
 test('NetworkService synchronizes time after IP when sntp is configured', async () => {
   const { NetworkService, time } = await setup({ sntp: 'pool.ntp.org' })
   const service = new NetworkService({ ssid: 'stackchan-ap', password: 'secret' })

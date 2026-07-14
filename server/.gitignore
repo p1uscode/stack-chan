@@ -1,0 +1,16 @@
+node_modules/
+# 秘密(CF-Access サービストークン等)。gateway.config.yaml に load 時マージ。
+config/gateway.secret.yaml
+config/gateway.secret.json
+# 実行時データ(sqlite + WAL/SHM)
+data/
+# 実行ログ(run.sh が毎回書き出す)
+logs/
+# 実設定。内部エンドポイント・ロボの hardwareId・人格定義が入るので追跡しない。
+# 雛形は config/gateway.config.example.yaml(実IP/実IDを入れないこと)。
+config/gateway.config.yaml
+config/gateway.config.json
+config/*.json.migrated
+config/old/
+config/*.prev
+config/*.bak-*
